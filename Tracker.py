@@ -12,9 +12,15 @@ from datetime import datetime
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from logging.handlers import TimedRotatingFileHandler
 
-logging.basicConfig(filename=f"tracker_{datetime.today().strftime('%Y.%m.%d')}.log", filemode='a',
-                    format='%(asctime)s | %(levelname)s | %(message)s', level=logging.DEBUG)
+logger = logging.getLogger()
+logger_fmt = '%(asctime)s | %(levelname)s | %(message)s'
+handler = TimedRotatingFileHandler("tracker.log", when="midnight", interval=1)
+handler.suffix = "%Y.%m.%d"
+logger.setLevel(logging.DEBUG)
+handler.setFormatter(logging.Formatter(logger_fmt))
+logger.addHandler(handler)
 
 
 class Config:
@@ -84,12 +90,12 @@ class Hash:
     def isChanged(self, new_hash, type="html"):
         existingHash = self.__readHashFromFile(type)
         if existingHash is None:
-            logging.info(
+            logger.info(
                 f"No hash found for {type}! Writing given hash to file")
             self.__writeHashtoFile(type, new_hash)
             return False
         if existingHash != new_hash:
-            logging.info(f"Hash mismatch for type: {type}")
+            logger.info(f"Hash mismatch for type: {type}")
             self.__writeHashtoFile(type, new_hash)
             return True
         return False
@@ -115,7 +121,7 @@ class Notify:
     def __sendEmail(self, recipients, subject, content):
         email_data = self.__getEmail(
             recipients, subject, content)
-        logging.debug(email_data)
+        logger.debug(email_data)
         session = smtplib.SMTP('smtp.gmail.com', 587)  # use gmail with port
         session.starttls()  # enable security
         # login with mail_id and password
@@ -126,27 +132,27 @@ class Notify:
     def send_health_notification(self, type: ServiceStatus, additional_info=None):
         subject = f"Service Health Notification: {type.name}"
         try:
-            logging.debug(
+            logger.debug(
                 f"Attempting to send service health notification, {type.name}")
             self.__sendEmail(
                 conf.service_health_notification_recipients, subject, self.content[type]+f"\nAdditional Info:\n{additional_info}")
-            logging.debug(
+            logger.debug(
                 f"Sucessfully sent service health notification, {type.name}")
         except Exception as e:
-            logging.exception(
+            logger.exception(
                 f"Error encountered when sending service health notification, {type.name}")
 
     def send_change_notification(self, additional_info):
         subject = "Toll Brothers House Tracker | DATA CHANGE !"
         try:
-            logging.debug(
+            logger.debug(
                 f"Attempting to send data change notification")
             self.__sendEmail(
                 conf.notification_recipients, subject, additional_info)
-            logging.debug(
+            logger.debug(
                 f"Sucessfully sent data change notification")
         except Exception as e:
-            logging.exception(
+            logger.exception(
                 f"Error encountered when sending data change notification")
 
 
@@ -173,18 +179,18 @@ Page data has changed, either available number of homes or quick move in houses 
                 "div", {"class": "site-plan-list__right"})
 
             if len(availabilityDivs) != 1:
-                logging.info(html_change_message)
+                logger.info(html_change_message)
                 return (True, html_change_message)
 
             new_hash = self._hash.get(availabilityDivs[0])
             if self._hash.isChanged(new_hash):
-                logging.info(data_change_message)
+                logger.info(data_change_message)
                 return (True, data_change_message)
 
             return (False, "")
 
         except Exception as e:
-            logging.exception(error_message)
+            logger.exception(error_message)
             notify.send_health_notification(ServiceStatus.EXCEPTION, e)
             return True, error_message
 
@@ -203,18 +209,18 @@ Page data has changed, either available number of homes or quick move in houses 
                             lotsAvailable.append(lot['lot_num'])
                     else:
                         lotsAvailable.append(lot['lot_num'])
-            logging.info(
+            logger.info(
                 f"Available Number of Lots (Including quick move ins): {len(lotsAvailable)}")
 
             new_hash = self._hash.get(lotsAvailable)
             if self._hash.isChanged(new_hash, "api"):
-                logging.info(data_change_message)
+                logger.info(data_change_message)
                 return True, data_change_message
 
             return False, ""
 
         except Exception as e:
-            logging.exception(error_message)
+            logger.exception(error_message)
             notify.send_health_notification(ServiceStatus.EXCEPTION, e)
             return False, ""
 
@@ -233,17 +239,19 @@ Page data has changed, either available number of homes or quick move in houses 
 def check(hWeb: HousingWebsite, notify: Notify):
     changed, message = hWeb.isPageChanged()
     if changed:
-        logging.info("Changes detected in this run !")
+        logger.info("Changes detected in this run !")
         notify.send_change_notification(message)
         return
 
-    logging.info("NO changes detected in this run !")
+    logger.info("NO changes detected in this run !")
 
 
 if __name__ == "__main__":
     conf = Config()
     notify = Notify(conf)
     hWeb = HousingWebsite(Hash(), notify)
+
+    logger.info("Application Started !")
 
     schedule.every(conf.notification_frequency).minutes.do(
         check, hWeb=hWeb, notify=notify)
