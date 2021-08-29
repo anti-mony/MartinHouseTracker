@@ -16,9 +16,15 @@ Set up Google app passwords: https://www.lifewire.com/get-a-password-to-access-g
 
 ## Execution
 
-Environmet Setup:  
+Environment Setup:  
 Use `Python >= 3.8`  
 Run `pip install -r requirements.txt`
+
+Clone this repo and cd into the directory
+```bash
+git clone git@github.com:anti-mony/MartinHouseTracker.git
+cd MartinHouseTracker
+```
 
 Now to execute run, 
 
